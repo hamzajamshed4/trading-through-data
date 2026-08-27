@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>trading-through-data · {{ symbol }}</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --panel-2: #263449;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --green: #22c55e;
+        --red: #f87171;
+        --accent: #38bdf8;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        padding: 20px 32px;
+        border-bottom: 1px solid #334155;
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+      }
+      header h1 { font-size: 20px; margin: 0; }
+      header .tag { color: var(--muted); font-size: 13px; }
+      main { padding: 24px 32px; max-width: 1080px; margin: 0 auto; }
+      form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        align-items: flex-end;
+        background: var(--panel);
+        padding: 16px;
+        border-radius: 10px;
+        margin-bottom: 24px;
+      }
+      form label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 4px; }
+      form input {
+        background: var(--panel-2);
+        border: 1px solid #3b4a63;
+        border-radius: 6px;
+        color: var(--text);
+        padding: 7px 9px;
+        width: 110px;
+        font-size: 14px;
+      }
+      form button {
+        background: var(--accent);
+        color: #06283d;
+        border: none;
+        border-radius: 6px;
+        padding: 9px 18px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 24px; }
+      .card { background: var(--panel); border-radius: 10px; padding: 16px; }
+      .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+      .card .v { font-size: 22px; font-weight: 700; margin-top: 6px; }
+      .pos { color: var(--green); }
+      .neg { color: var(--red); }
+      .chart { background: var(--panel); border-radius: 10px; padding: 14px; margin-bottom: 20px; }
+      .chart img { width: 100%; display: block; border-radius: 6px; }
+      table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; }
+      th, td { text-align: left; padding: 9px 14px; font-size: 13px; border-bottom: 1px solid #334155; }
+      th { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: .04em; }
+      .footnote { color: var(--muted); font-size: 12px; margin-top: 22px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>trading-through-data</h1>
+      <span class="tag">SMA crossover backtest dashboard</span>
+    </header>
+    <main>
+      <form method="get" action="/">
+        <label>Symbol<input type="text" name="symbol" value="{{ symbol }}" /></label>
+        <label>Days<input type="number" name="days" value="{{ params.days }}" min="60" /></label>
+        <label>Fast SMA<input type="number" name="fast" value="{{ params.fast }}" min="2" /></label>
+        <label>Slow SMA<input type="number" name="slow" value="{{ params.slow }}" min="3" /></label>
+        <label>Seed<input type="number" name="seed" value="{{ params.seed }}" /></label>
+        <button type="submit">Run backtest</button>
+      </form>
+
+      <section class="cards">
+        <div class="card">
+          <div class="k">Total return</div>
+          <div class="v {{ 'pos' if metrics.total_return >= 0 else 'neg' }}">{{ '%+.2f%%' % (metrics.total_return * 100) }}</div>
+        </div>
+        <div class="card">
+          <div class="k">Buy &amp; hold</div>
+          <div class="v {{ 'pos' if metrics.buy_hold_return >= 0 else 'neg' }}">{{ '%+.2f%%' % (metrics.buy_hold_return * 100) }}</div>
+        </div>
+        <div class="card">
+          <div class="k">Sharpe</div>
+          <div class="v">{{ '%.2f' % metrics.sharpe_ratio }}</div>
+        </div>
+        <div class="card">
+          <div class="k">Max drawdown</div>
+          <div class="v neg">{{ '%.2f%%' % (metrics.max_drawdown * 100) }}</div>
+        </div>
+        <div class="card">
+          <div class="k">Final equity</div>
+          <div class="v">${{ '{:,.0f}'.format(metrics.final_equity) }}</div>
+        </div>
+        <div class="card">
+          <div class="k">Trades</div>
+          <div class="v">{{ metrics.num_trades }}</div>
+        </div>
+      </section>
+
+      <div class="chart"><img src="data:image/png;base64,{{ price_chart }}" alt="Price and SMA signals" /></div>
+      <div class="chart"><img src="data:image/png;base64,{{ equity_chart }}" alt="Equity curve" /></div>
+
+      <table>
+        <thead><tr><th>#</th><th>Entry</th><th>Exit</th></tr></thead>
+        <tbody>
+          {% for t in trades %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ t.entry.date() }}</td>
+            <td>{{ t.exit.date() }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3">No trades generated for these parameters.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <p class="footnote">
+        Synthetic data is generated deterministically from the seed; results are for
+        demonstration only and are not investment advice.
+      </p>
+    </main>
+  </body>
+</html>

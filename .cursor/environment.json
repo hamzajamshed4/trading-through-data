@@ -1,0 +1,11 @@
+{
+  "name": "trading-through-data",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "web",
+      "command": ". .venv/bin/activate && python -m trading_through_data.web"
+    }
+  ],
+  "ports": [5000]
+}

@@ -1,0 +1,8 @@
+# Runtime and development dependencies for trading-through-data.
+# The canonical source of dependencies is pyproject.toml; this file mirrors
+# them for tooling that expects a requirements file.
+flask>=3.0
+pandas>=2.0
+numpy>=1.24
+matplotlib>=3.7
+pytest>=8.0
