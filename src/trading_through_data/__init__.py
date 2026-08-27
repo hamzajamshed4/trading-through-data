@@ -18,6 +18,23 @@ __all__ = [
     "generate_price_data",
     "load_price_data",
     "sma_crossover_signals",
+    "TradingAgent",
+    "IndicatorPolicy",
+    "RiskConfig",
+    "SimulatedBroker",
+    "create_broker",
 ]
+
+
+def __getattr__(name):  # lazy re-exports to keep import time light
+    if name in ("TradingAgent", "IndicatorPolicy", "RiskConfig"):
+        from . import agent
+
+        return getattr(agent, name)
+    if name in ("SimulatedBroker", "create_broker"):
+        from . import mt5
+
+        return getattr(mt5, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __version__ = "0.1.0"

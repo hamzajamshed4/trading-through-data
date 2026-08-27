@@ -20,9 +20,16 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+# Live MetaTrader 5 connectivity. Windows-only: the MetaTrader5 package provides
+# wheels for Windows and requires a running MT5 terminal. Not installed by
+# default so the toolkit and simulated broker work on Linux/macOS.
+mt5 = [
+    "MetaTrader5>=5.0.45",
+]
 
 [project.scripts]
 ttd = "trading_through_data.cli:main"
+ttd-agent = "trading_through_data.agent.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

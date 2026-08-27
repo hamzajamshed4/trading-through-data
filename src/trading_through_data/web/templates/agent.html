@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI MT5 agent · {{ symbol }}</title>
+    <style>
+      :root {
+        --bg: #0f172a; --panel: #1e293b; --panel-2: #263449; --text: #e2e8f0;
+        --muted: #94a3b8; --green: #22c55e; --red: #f87171; --accent: #38bdf8; --amber: #f59e0b;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+      header { padding: 20px 32px; border-bottom: 1px solid #334155; display: flex; align-items: baseline; gap: 14px; }
+      header h1 { font-size: 20px; margin: 0; }
+      header .tag { color: var(--muted); font-size: 13px; }
+      header .nav { margin-left: auto; color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 600; }
+      main { padding: 24px 32px; max-width: 1080px; margin: 0 auto; }
+      .banner { background: rgba(56,189,248,.1); border: 1px solid #334155; border-left: 3px solid var(--accent);
+                border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+      form { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; background: var(--panel); padding: 16px; border-radius: 10px; margin-bottom: 24px; }
+      form label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 4px; }
+      form input { background: var(--panel-2); border: 1px solid #3b4a63; border-radius: 6px; color: var(--text); padding: 7px 9px; width: 100px; font-size: 14px; }
+      form button { background: var(--accent); color: #06283d; border: none; border-radius: 6px; padding: 9px 18px; font-weight: 600; cursor: pointer; font-size: 14px; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 24px; }
+      .card { background: var(--panel); border-radius: 10px; padding: 16px; }
+      .card .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+      .card .v { font-size: 22px; font-weight: 700; margin-top: 6px; }
+      .pos { color: var(--green); } .neg { color: var(--red); }
+      .chart { background: var(--panel); border-radius: 10px; padding: 14px; margin-bottom: 20px; }
+      .chart img { width: 100%; display: block; border-radius: 6px; }
+      h2 { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 26px 0 10px; }
+      table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; }
+      th, td { text-align: left; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #334155; }
+      th { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: .04em; }
+      .buy { color: var(--green); font-weight: 600; } .sell { color: var(--red); font-weight: 600; }
+      .close { color: var(--amber); font-weight: 600; }
+      .footnote { color: var(--muted); font-size: 12px; margin-top: 22px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>AI MetaTrader 5 agent</h1>
+      <span class="tag">observe &rarr; decide &rarr; size &rarr; execute</span>
+      <a class="nav" href="/">&larr; Backtest dashboard</a>
+    </header>
+    <main>
+      <div class="banner">
+        Running on the <strong>simulated broker</strong> (offline paper trading). Live mode targets a real
+        MetaTrader&nbsp;5 terminal via <code>ttd-agent --mode live</code> with account credentials.
+      </div>
+
+      <form method="get" action="/agent">
+        <label>Symbol<input type="text" name="symbol" value="{{ symbol }}" /></label>
+        <label>Days<input type="number" name="days" value="{{ params.days }}" min="120" /></label>
+        <label>Fast SMA<input type="number" name="fast" value="{{ params.fast }}" min="2" /></label>
+        <label>Slow SMA<input type="number" name="slow" value="{{ params.slow }}" min="3" /></label>
+        <label>Seed<input type="number" name="seed" value="{{ params.seed }}" /></label>
+        <label>Risk %<input type="number" step="0.5" name="risk" value="{{ params.risk }}" /></label>
+        <button type="submit">Run agent</button>
+      </form>
+
+      <section class="cards">
+        <div class="card"><div class="k">Total return</div>
+          <div class="v {{ 'pos' if metrics.total_return >= 0 else 'neg' }}">{{ '%+.2f%%' % (metrics.total_return * 100) }}</div></div>
+        <div class="card"><div class="k">Final equity</div>
+          <div class="v">${{ '{:,.0f}'.format(metrics.final_equity) }}</div></div>
+        <div class="card"><div class="k">Trades</div><div class="v">{{ metrics.num_trades }}</div></div>
+        <div class="card"><div class="k">Win rate</div><div class="v">{{ '%.0f%%' % (metrics.win_rate * 100) }}</div></div>
+        <div class="card"><div class="k">Profit factor</div>
+          <div class="v">{{ metrics.profit_factor if metrics.profit_factor is not none else 'n/a' }}</div></div>
+        <div class="card"><div class="k">Max drawdown</div>
+          <div class="v neg">{{ '%.2f%%' % (metrics.max_drawdown * 100) }}</div></div>
+      </section>
+
+      <div class="chart"><img src="data:image/png;base64,{{ equity_chart }}" alt="Agent equity curve" /></div>
+
+      <h2>Recent agent decisions</h2>
+      <table>
+        <thead><tr><th>Time</th><th>Signal</th><th>Score</th><th>RSI</th><th>Price</th><th>Action</th></tr></thead>
+        <tbody>
+          {% for d in actions %}
+          <tr>
+            <td>{{ d.time.date() if d.time.date is defined else d.time }}</td>
+            <td class="{{ d.signal }}">{{ d.signal|upper }}</td>
+            <td>{{ '%+.2f' % d.score }}</td>
+            <td>{{ d.rsi }}</td>
+            <td>{{ '%.2f' % d.price }}</td>
+            <td>{{ d.actions|join(', ') }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6">No actions taken for these parameters.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <h2>Closed trades ({{ trades|length }})</h2>
+      <table>
+        <thead><tr><th>#</th><th>Side</th><th>Entry</th><th>Exit</th><th>Profit</th><th>Reason</th></tr></thead>
+        <tbody>
+          {% for t in trades %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td class="{{ t.side }}">{{ t.side|upper }}</td>
+            <td>{{ t.entry_time.date() if t.entry_time.date is defined else t.entry_time }}</td>
+            <td>{{ t.exit_time.date() if t.exit_time.date is defined else t.exit_time }}</td>
+            <td class="{{ 'pos' if t.profit >= 0 else 'neg' }}">{{ '%+.2f' % t.profit }}</td>
+            <td>{{ t.reason }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6">No trades.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <p class="footnote">Synthetic data, deterministic from the seed. For demonstration only — not investment advice.</p>
+    </main>
+  </body>
+</html>

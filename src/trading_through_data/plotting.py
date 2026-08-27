@@ -55,10 +55,17 @@ def render_price_chart(result: BacktestResult) -> str:
 
 def render_equity_chart(result: BacktestResult) -> str:
     """Render the strategy equity curve as a base64 PNG."""
+    return render_equity_series(
+        result.equity_curve, initial=result.metrics["initial_capital"], title="Strategy equity curve"
+    )
+
+
+def render_equity_series(equity, initial: float, title: str = "Equity curve") -> str:
+    """Render any equity :class:`pandas.Series` as a base64 PNG."""
     fig, ax = plt.subplots(figsize=(10, 3.2))
-    ax.plot(result.equity_curve.index, result.equity_curve.values, color="#16a34a", linewidth=1.4)
-    ax.axhline(result.metrics["initial_capital"], color="#9ca3af", linestyle="--", linewidth=1.0)
-    ax.set_title("Strategy equity curve")
+    ax.plot(equity.index, equity.values, color="#16a34a", linewidth=1.4)
+    ax.axhline(initial, color="#9ca3af", linestyle="--", linewidth=1.0)
+    ax.set_title(title)
     ax.set_ylabel("Equity ($)")
     ax.grid(True, alpha=0.25)
     return _fig_to_base64(fig)
