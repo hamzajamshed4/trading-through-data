@@ -122,6 +122,26 @@ class MetaTrader5Broker(Broker):
             )
         return result
 
+    def symbol_spec(self, symbol: str) -> dict:
+        """Return the instrument's contract size, volume rules, and precision.
+
+        Also selects the symbol into Market Watch so quotes/orders work.
+        """
+        mt5 = self._mt5
+        if not mt5.symbol_select(symbol, True):
+            raise RuntimeError(f"could not select symbol {symbol!r} in Market Watch")
+        info = mt5.symbol_info(symbol)
+        if info is None:
+            raise RuntimeError(f"no symbol_info for {symbol!r}")
+        return {
+            "contract_size": float(getattr(info, "trade_contract_size", 1.0)),
+            "volume_min": float(info.volume_min),
+            "volume_step": float(info.volume_step),
+            "volume_max": float(info.volume_max),
+            "digits": int(info.digits),
+            "point": float(info.point),
+        }
+
     def submit_order(
         self,
         symbol: str,
@@ -132,8 +152,21 @@ class MetaTrader5Broker(Broker):
         comment: str = "",
     ) -> OrderResult:
         mt5 = self._mt5
+        spec = self.symbol_spec(symbol)
+        digits = spec["digits"]
+
+        # Snap volume to the symbol's step and clamp to its min/max bounds so the
+        # broker does not reject the order with "invalid volume".
+        step = spec["volume_step"]
+        if step > 0:
+            volume = round(volume / step) * step
+        volume = max(spec["volume_min"], min(volume, spec["volume_max"]))
+        volume = round(volume, 8)
+        if volume <= 0:
+            return OrderResult(ok=False, comment="normalized volume is zero")
+
         tick = mt5.symbol_info_tick(symbol)
-        price = tick.ask if side is OrderSide.BUY else tick.bid
+        price = round(tick.ask if side is OrderSide.BUY else tick.bid, digits)
         order_type = mt5.ORDER_TYPE_BUY if side is OrderSide.BUY else mt5.ORDER_TYPE_SELL
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -147,9 +180,9 @@ class MetaTrader5Broker(Broker):
             "comment": comment or "ttd-agent",
         }
         if sl is not None:
-            request["sl"] = float(sl)
+            request["sl"] = round(float(sl), digits)
         if tp is not None:
-            request["tp"] = float(tp)
+            request["tp"] = round(float(tp), digits)
         result = mt5.order_send(request)
         ok = result is not None and result.retcode == mt5.TRADE_RETCODE_DONE
         return OrderResult(

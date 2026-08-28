@@ -34,6 +34,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--risk", type=float, default=0.02, help="Risk fraction per trade.")
     p.add_argument("--atr-stop", type=float, default=2.0, help="Stop-loss in ATR multiples.")
     p.add_argument("--atr-take", type=float, default=3.0, help="Take-profit in ATR multiples.")
+    p.add_argument("--volume", type=float, default=None,
+                   help="Fixed order volume in lots. Overrides risk-based sizing (e.g. --volume 0.01).")
+    p.add_argument("--entry-threshold", type=float, default=None,
+                   help="Override the policy entry conviction threshold (default 0.35).")
+    p.add_argument("--exit-threshold", type=float, default=None,
+                   help="Override the policy exit conviction threshold (default 0.15).")
 
     # Live (MetaTrader5) connection options; env vars are the safer default.
     p.add_argument("--mt5-login", type=int, default=None, help="MT5 account login (or MT5_LOGIN).")
@@ -42,6 +48,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--timeframe", default="H1", help="Live timeframe, e.g. M15, H1, D1.")
     p.add_argument("--verbose", action="store_true", help="Print every bar's decision (simulated).")
     return p
+
+
+def _build_policy(args) -> IndicatorPolicy:
+    kwargs = {}
+    if args.entry_threshold is not None:
+        kwargs["entry_threshold"] = args.entry_threshold
+    if args.exit_threshold is not None:
+        kwargs["exit_threshold"] = args.exit_threshold
+    return IndicatorPolicy(**kwargs)
 
 
 def _run_simulated(args) -> int:
@@ -53,9 +68,12 @@ def _run_simulated(args) -> int:
     broker = create_broker(
         "simulated", prices=prices, symbol=args.symbol, initial_balance=args.balance
     )
-    risk = RiskConfig(risk_per_trade=args.risk, atr_stop_mult=args.atr_stop, atr_take_mult=args.atr_take)
+    risk = RiskConfig(
+        risk_per_trade=args.risk, atr_stop_mult=args.atr_stop,
+        atr_take_mult=args.atr_take, fixed_volume=args.volume,
+    )
     agent = TradingAgent(
-        broker, args.symbol, policy=IndicatorPolicy(),
+        broker, args.symbol, policy=_build_policy(args),
         risk=risk, fast_window=args.fast, slow_window=args.slow,
     )
     report = agent.run()
@@ -93,16 +111,32 @@ def _run_live(args) -> int:
             path=path, timeframe=args.timeframe,
         )
         broker.connect()
+        # Calibrate sizing to the instrument's real contract size and volume
+        # rules so orders are valid (critical for symbols like XAUUSD).
+        spec = broker.symbol_spec(args.symbol)
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    agent = TradingAgent(broker, args.symbol, fast_window=args.fast, slow_window=args.slow,
-                         risk=RiskConfig(risk_per_trade=args.risk, atr_stop_mult=args.atr_stop,
-                                         atr_take_mult=args.atr_take))
+    risk = RiskConfig(
+        risk_per_trade=args.risk,
+        atr_stop_mult=args.atr_stop,
+        atr_take_mult=args.atr_take,
+        contract_size=spec["contract_size"],
+        fixed_volume=args.volume,
+        volume_min=spec["volume_min"],
+        volume_step=spec["volume_step"],
+        volume_max=spec["volume_max"],
+    )
+    agent = TradingAgent(broker, args.symbol, policy=_build_policy(args),
+                         fast_window=args.fast, slow_window=args.slow, risk=risk)
     decision, features, actions = agent.run_once()
+    equity = broker.account().equity
+    planned = risk.volume(equity, features)
     print(f"AI MT5 agent — {args.symbol} (live, {args.timeframe})")
     print(f"price={features.close:.5f} rsi={features.rsi:.1f} atr={features.atr:.5f}")
+    print(f"contract_size={spec['contract_size']:g} volume_min={spec['volume_min']:g} "
+          f"volume_step={spec['volume_step']:g} planned_volume={planned:g} lots")
     print(f"decision={decision.signal.value} score={decision.score:+.2f} "
           f"confidence={decision.confidence:.2f}")
     print(f"reason: {'; '.join(decision.reasons)}")
