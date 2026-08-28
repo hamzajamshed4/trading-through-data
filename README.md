@@ -70,6 +70,24 @@ ttd-agent --mode live --symbol EURUSD --timeframe H1
 `--mode live` performs one observe → decide → execute cycle and prints the
 decision; schedule it (cron / Task Scheduler / a loop) to run it continuously.
 
+#### Easiest start on Windows
+
+Store credentials once so every future window has them:
+
+```cmd
+setx MT5_LOGIN your-login
+setx MT5_PASSWORD your-password
+setx MT5_SERVER your-server
+```
+
+Then, each session: open MetaTrader 5, log in, enable **Algo Trading**, and
+double-click **`run-agent.bat`** (repeats hourly, appends to `agent_log.txt`).
+Optional args: `run-agent.bat SYMBOL TIMEFRAME LOTS` (e.g. `run-agent.bat XAUUSD H1 0.01`).
+
+To review results, double-click **`check-status.bat`** (or run
+`ttd-agent --status`) for account balance/equity, open positions, and recent
+closed trades. Optional arg: number of history days (`check-status.bat 30`).
+
 ### Backtest (command line)
 
 ```bash
