@@ -142,6 +142,28 @@ class MetaTrader5Broker(Broker):
             "point": float(info.point),
         }
 
+    def recent_deals(self, days: int = 7) -> list[dict]:
+        """Return closed deals from the last ``days`` days (symbol, side, profit)."""
+        from datetime import datetime, timedelta
+
+        mt5 = self._mt5
+        now = datetime.now()
+        deals = mt5.history_deals_get(now - timedelta(days=days), now) or []
+        out: list[dict] = []
+        for d in deals:
+            if not getattr(d, "symbol", ""):
+                continue
+            out.append(
+                {
+                    "time": datetime.fromtimestamp(d.time),
+                    "symbol": d.symbol,
+                    "side": "buy" if d.type == mt5.DEAL_TYPE_BUY else "sell",
+                    "volume": d.volume,
+                    "profit": d.profit,
+                }
+            )
+        return out
+
     def submit_order(
         self,
         symbol: str,

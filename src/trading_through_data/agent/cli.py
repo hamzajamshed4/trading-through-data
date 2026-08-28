@@ -47,6 +47,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mt5-path", default=None, help="Path to terminal64.exe (or MT5_PATH).")
     p.add_argument("--timeframe", default="H1", help="Live timeframe, e.g. M15, H1, D1.")
     p.add_argument("--verbose", action="store_true", help="Print every bar's decision (simulated).")
+    p.add_argument("--status", action="store_true",
+                   help="Show live account balance, open positions, and recent trades, then exit.")
+    p.add_argument("--history-days", type=int, default=7,
+                   help="How many days of closed-trade history to show with --status.")
     return p
 
 
@@ -99,18 +103,62 @@ def _run_simulated(args) -> int:
     return 0
 
 
-def _run_live(args) -> int:
+def _connect_live(args):
+    """Resolve credentials, create the live broker, and connect. Raises RuntimeError."""
     login = args.mt5_login or (int(os.environ["MT5_LOGIN"]) if os.environ.get("MT5_LOGIN") else None)
     server = args.mt5_server or os.environ.get("MT5_SERVER")
     password = os.environ.get("MT5_PASSWORD")
     path = args.mt5_path or os.environ.get("MT5_PATH")
+    broker = create_broker(
+        "live", login=login, password=password, server=server,
+        path=path, timeframe=args.timeframe,
+    )
+    broker.connect()
+    return broker
 
+
+def _run_status(args) -> int:
     try:
-        broker = create_broker(
-            "live", login=login, password=password, server=server,
-            path=path, timeframe=args.timeframe,
-        )
-        broker.connect()
+        broker = _connect_live(args)
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    acct = broker.account()
+    positions = broker.positions()
+    deals = broker.recent_deals(days=args.history_days)
+
+    print("=" * 60)
+    print("MetaTrader 5 account status")
+    print("=" * 60)
+    print(f"Balance   : {acct.balance:,.2f} {acct.currency}")
+    print(f"Equity    : {acct.equity:,.2f} {acct.currency}")
+    print(f"Floating  : {acct.equity - acct.balance:+,.2f} {acct.currency}")
+
+    print(f"\nOpen positions ({len(positions)}):")
+    if positions:
+        for p in positions:
+            print(f"  {p.symbol:<10} {p.side.value:<4} {p.volume:g} @ {p.entry_price:.5f} "
+                  f"sl={p.sl or '-'} tp={p.tp or '-'} profit={p.profit:+.2f}")
+    else:
+        print("  none")
+
+    realized = sum(d["profit"] for d in deals)
+    print(f"\nClosed trades, last {args.history_days} day(s) ({len(deals)}), "
+          f"realized P&L {realized:+,.2f}:")
+    if deals:
+        for d in deals[-20:]:
+            print(f"  {str(d['time'])[:19]}  {d['symbol']:<10} {d['side']:<4} "
+                  f"{d['volume']:g}  profit={d['profit']:+.2f}")
+    else:
+        print("  none")
+    broker.shutdown()
+    return 0
+
+
+def _run_live(args) -> int:
+    try:
+        broker = _connect_live(args)
         # Calibrate sizing to the instrument's real contract size and volume
         # rules so orders are valid (critical for symbols like XAUUSD).
         spec = broker.symbol_spec(args.symbol)
@@ -147,6 +195,8 @@ def _run_live(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+    if args.status:
+        return _run_status(args)
     if args.mode == "live":
         return _run_live(args)
     return _run_simulated(args)

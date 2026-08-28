@@ -84,6 +84,10 @@ Then, each session: open MetaTrader 5, log in, enable **Algo Trading**, and
 double-click **`run-agent.bat`** (repeats hourly, appends to `agent_log.txt`).
 Optional args: `run-agent.bat SYMBOL TIMEFRAME LOTS` (e.g. `run-agent.bat XAUUSD H1 0.01`).
 
+To review results, double-click **`check-status.bat`** (or run
+`ttd-agent --status`) for account balance/equity, open positions, and recent
+closed trades. Optional arg: number of history days (`check-status.bat 30`).
+
 ### Backtest (command line)
 
 ```bash
